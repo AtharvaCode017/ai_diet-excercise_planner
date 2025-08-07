@@ -527,7 +527,7 @@
             let chatHistory = [];
             chatHistory.push({ role: "user", parts: [{ text: prompt }] });
             const payload = { contents: chatHistory };
-            const apiKey = "AIzaSyDvqThkW83pEnpcq5CmrH2ZRRm-Epua7bU"; // IMPORTANT: Replace with your actual API key when running locally
+            const apiKey = ""; // IMPORTANT: Replace with your actual API key when running locally
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
             
             const response = await fetch(apiUrl, {
@@ -553,3 +553,4 @@
     </script>
 </body>
 </html>
+
