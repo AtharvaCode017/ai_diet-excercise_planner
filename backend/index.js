@@ -11,6 +11,10 @@ app.use(express.json());
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
+app.get("/", (req, res) => {
+  res.send("AI Diet Backend is running 🚀");
+});
+
 app.post("/generate-plan", async (req, res) => {
   try {
     const userData = req.body;
