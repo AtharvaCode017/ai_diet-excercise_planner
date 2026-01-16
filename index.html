@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Workout Planner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Styling for the output content */
+        #plan-content-wrapper {
+             background-color: white;
+             padding: 2rem;
+        }
+        #plan-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        #plan-content th, #plan-content td {
+            border: 1px solid #e2e8f0;
+            padding: 0.75rem;
+            text-align: left;
+        }
+        #plan-content th {
+            background-color: #f7fafc;
+            font-weight: 600;
+        }
+        #plan-content h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            text-align:center;
+            color: #111827;
+        }
+         #plan-content h4 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: #1f2937;
+        }
+        #plan-content ul {
+            list-style-type: disc;
+            padding-left: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        #plan-content p > strong {
+            font-weight: 600;
+        }
+        .download-buttons {
+            display: none; /* Hidden by default */
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        /* Modal for errors */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+        }
+        /* BMI Visualizer Styles */
+        .bmi-visualizer {
+            width: 300px;
+            height: 150px;
+            position: relative;
+            margin: 2.5rem auto 1rem; /* Added more margin top */
+        }
+        .bmi-gauge {
+            width: 300px;
+            height: 150px;
+            border-radius: 150px 150px 0 0;
+            position: absolute;
+            bottom: 0;
+            background: conic-gradient(
+                from -90deg,
+                #3b82f6 0% 21.25%,   /* Underweight <18.5 */
+                #22c55e 21.25% 42.5%, /* Normal 18.5-24.9 */
+                #eab308 42.5% 63.75%, /* Overweight 25-29.9 */
+                #f97316 63.75% 85%,   /* Obese 30-34.9 */
+                #ef4444 85% 100%     /* Extremely Obese >35 */
+            );
+        }
+        .bmi-gauge-cover {
+            width: 260px;
+            height: 130px;
+            background: #f3f4f6;
+            border-radius: 130px 130px 0 0;
+            position: absolute;
+            bottom: 0;
+            left: 20px;
+        }
+        .bmi-needle {
+            width: 2px;
+            height: 130px;
+            background: #1f2937;
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform-origin: bottom center;
+            transition: transform 0.5s ease-in-out;
+            transform: translateX(-50%) rotate(0deg); /* Initial position */
+        }
+        .bmi-center-circle {
+            width: 30px;
+            height: 30px;
+            background: #1f2937;
+            border-radius: 50%;
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .bmi-label {
+            position: absolute;
+            bottom: 5px; /* Adjusted position */
+            left: 50%;
+            width: 120px; /* Increased width for better spacing */
+            margin-left: -60px; /* Center the label */
+            height: 170px; /* Adjusted height */
+            transform-origin: bottom center;
+            text-align: center;
+            font-size: 10px;
+            color: #4b5563;
+        }
+        .bmi-label > span {
+            display: block;
+            position: absolute;
+            width: 100%;
+            top: 0;
+            left: 0;
+            transform: rotate(var(--inner-rotation));
+        }
+        .bmi-label .category {
+            font-weight: 600;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-900">AI Fitness & Diet Planner</h1>
+            <p class="text-lg text-gray-600 mt-2">Get a downloadable, poster-style workout and diet plan for the week.</p>
+        </header>
+
+        <main>
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <form id="workout-form">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <!-- User Information -->
+                        <div class="col-span-1">
+                            <label for="age" class="block text-sm font-medium text-gray-700">Age</label>
+                            <input type="number" id="age" name="age" min="8" max="100" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" placeholder="8-100" required>
+                        </div>
+                        <div class="col-span-1">
+                            <label for="gender" class="block text-sm font-medium text-gray-700">Gender</label>
+                            <select id="gender" name="gender" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" required>
+                                <option>Male</option>
+                                <option>Female</option>
+                                <option>Other</option>
+                            </select>
+                        </div>
+                        <div class="col-span-1">
+                            <label for="weight" class="block text-sm font-medium text-gray-700">Weight (kg)</label>
+                            <input type="number" id="weight" name="weight" min="1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" placeholder="e.g., 70" required>
+                        </div>
+                        <div class="col-span-1">
+                            <label for="height" class="block text-sm font-medium text-gray-700">Height (cm)</label>
+                            <input type="number" id="height" name="height" min="1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" placeholder="e.g., 175" required>
+                        </div>
+
+                        <!-- Workout & Diet Preferences -->
+                        <div class="col-span-1">
+                            <label for="experience" class="block text-sm font-medium text-gray-700">Experience Level</label>
+                            <select id="experience" name="experience" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" required>
+                                <option>Beginner</option>
+                                <option>Regular</option>
+                                <option>Advanced</option>
+                            </select>
+                        </div>
+                        <div class="col-span-1">
+                            <label for="workout-mode" class="block text-sm font-medium text-gray-700">Workout Mode</label>
+                            <select id="workout-mode" name="workout-mode" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" required>
+                                <option>Home</option>
+                                <option>Cardio</option>
+                                <option>Weight Training</option>
+                            </select>
+                        </div>
+                        <div class="col-span-1">
+                            <label for="goal" class="block text-sm font-medium text-gray-700">Primary Goal</label>
+                            <select id="goal" name="goal" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" required>
+                                <option>Fat Loss</option>
+                                <option>Strength Training</option>
+                                <option>Muscle Building</option>
+                                <option>Weight Gain</option>
+                            </select>
+                        </div>
+                         <div class="col-span-1 md:col-span-3">
+                            <label for="diet-preference" class="block text-sm font-medium text-gray-700">Diet Preference</label>
+                            <select id="diet-preference" name="diet-preference" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" required>
+                                <option>Anything</option>
+                                <option>Vegetarian</option>
+                                <option>Non-Vegetarian</option>
+                                <option>Vegan</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="bmi-info-container" class="mt-4 text-center text-gray-600 hidden">
+                        <p id="bmi-text" class="text-sm font-semibold"></p>
+                        <div class="bmi-visualizer">
+                            <div class="bmi-gauge"></div>
+                            <div class="bmi-gauge-cover"></div>
+                            <!-- Labels for the gauge -->
+                            <div class="bmi-label" style="transform: rotate(-68deg); --inner-rotation: 68deg;">
+                                <span><span class="category">Underweight</span><br>&lt;18.5</span>
+                            </div>
+                            <div class="bmi-label" style="transform: rotate(-32deg); --inner-rotation: 32deg;">
+                                <span><span class="category">Normal</span><br>18.5-24.9</span>
+                            </div>
+                             <div class="bmi-label" style="transform: rotate(8deg); --inner-rotation: -8deg;">
+                                <span><span class="category">Overweight</span><br>25-29.9</span>
+                            </div>
+                             <div class="bmi-label" style="transform: rotate(45deg); --inner-rotation: -45deg;">
+                                <span><span class="category">Obese</span><br>30-34.9</span>
+                            </div>
+                             <div class="bmi-label" style="transform: rotate(80deg); --inner-rotation: -80deg;">
+                                <span><span class="category">Extremely<br>Obese</span><br>&gt;35</span>
+                            </div>
+                            <!-- End Labels -->
+                            <div class="bmi-needle" id="bmi-needle"></div>
+                            <div class="bmi-center-circle"></div>
+                        </div>
+                    </div>
+
+
+                    <div class="mt-6 text-center">
+                        <button type="submit" id="generate-btn" class="w-full md:w-auto inline-flex justify-center rounded-md border border-transparent bg-indigo-600 py-3 px-6 text-base font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                            Generate My Plan
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="workout-plan" class="mt-8 hidden">
+                 <div class="download-buttons" id="download-buttons">
+                    <button id="download-jpg" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">Download JPG</button>
+                    <button id="download-pdf" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">Download PDF</button>
+                </div>
+                <div id="plan-content-wrapper" class="rounded-lg shadow-md">
+                    <div id="plan-content"></div>
+                </div>
+                <div id="loader" class="loader hidden"></div>
+            </div>
+        </main>
+        
+        <div id="error-modal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <h3 id="modal-title" class="text-xl font-bold text-red-600 mb-4">Validation Error</h3>
+                <p id="modal-message" class="text-gray-700 mb-6"></p>
+                <button id="close-modal" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Close</button>
+            </div>
+        </div>
+
+        <footer class="text-center mt-8 text-sm text-gray-500">
+            <p>Disclaimer: This plan is generated by an AI. Consult with a fitness professional and a nutritionist before starting any new workout or diet regimen.</p>
+        </footer>
+    </div>
+
+    <script>
+        const form = document.getElementById('workout-form');
+        const workoutPlanDiv = document.getElementById('workout-plan');
+        const planContentDiv = document.getElementById('plan-content');
+        const loader = document.getElementById('loader');
+        const generateBtn = document.getElementById('generate-btn');
+        const downloadButtons = document.getElementById('download-buttons');
+        const bmiInfoContainer = document.getElementById('bmi-info-container');
+        const bmiText = document.getElementById('bmi-text');
+        const bmiNeedle = document.getElementById('bmi-needle');
+        const errorModal = document.getElementById('error-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMessage = document.getElementById('modal-message');
+        const closeModalBtn = document.getElementById('close-modal');
+
+        // Function to show the custom modal
+        function showModal(title, message) {
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            errorModal.classList.remove('hidden');
+        }
+
+        // Event listener to close the modal
+        closeModalBtn.addEventListener('click', () => {
+            errorModal.classList.add('hidden');
+        });
+        errorModal.addEventListener('click', (e) => {
+            if (e.target === errorModal) {
+                errorModal.classList.add('hidden');
+            }
+        });
+
+        // Function to calculate and display BMI in real-time
+        function updateBmiInfo() {
+            const weight = parseFloat(document.getElementById('weight').value);
+            const height = parseFloat(document.getElementById('height').value);
+            if (weight > 0 && height > 0) {
+                const heightInMeters = height / 100;
+                const bmi = (weight / (heightInMeters * heightInMeters));
+                bmiText.textContent = `Your calculated BMI is ${bmi.toFixed(1)}.`;
+                bmiInfoContainer.classList.remove('hidden');
+                
+                // Calculate needle rotation
+                let rotation = -90; // Start at the beginning of the gauge
+                if (bmi < 12) rotation = -90;
+                else if (bmi > 40) rotation = 90;
+                else {
+                    // Map BMI range (12-40) to rotation range (-90 to 90)
+                    rotation = ((bmi - 12) / (40 - 12)) * 180 - 90;
+                }
+                bmiNeedle.style.transform = `translateX(-50%) rotate(${rotation}deg)`;
+
+            } else {
+                bmiInfoContainer.classList.add('hidden');
+            }
+        }
+
+        // Add event listeners to weight and height fields
+        document.getElementById('weight').addEventListener('input', updateBmiInfo);
+        document.getElementById('height').addEventListener('input', updateBmiInfo);
+
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // --- Validation Logic ---
+            const age = parseInt(document.getElementById('age').value);
+            const weight = parseFloat(document.getElementById('weight').value);
+            const height = parseFloat(document.getElementById('height').value);
+            const goal = document.getElementById('goal').value;
+
+            if (isNaN(age) || age < 8 || age > 100) {
+                showModal('Invalid Age', 'Please enter a valid age between 8 and 100.');
+                return;
+            }
+            if (isNaN(weight) || weight <= 0) {
+                showModal('Invalid Weight', 'Please enter a positive number for weight.');
+                return;
+            }
+            if (isNaN(height) || height <= 0) {
+                showModal('Invalid Height', 'Please enter a positive number for height.');
+                return;
+            }
+
+            const heightInMeters = height / 100;
+            const bmi = weight / (heightInMeters * heightInMeters);
+
+            if (bmi < 16.5 && goal === 'Fat Loss') {
+                showModal('Goal Not Recommended', `Your BMI is critically low (${bmi.toFixed(1)}). The goal 'Fat Loss' is not recommended. Please consult a professional or choose a different goal.`);
+                return;
+            }
+            if (bmi > 35 && goal === 'Weight Gain') {
+                showModal('Goal Not Recommended', `Your BMI is critically high (${bmi.toFixed(1)}). The goal 'Weight Gain' is not recommended. Please consult a professional or choose a different goal.`);
+                return;
+            }
+            // --- End Validation ---
+
+            workoutPlanDiv.classList.remove('hidden');
+            loader.classList.remove('hidden');
+            downloadButtons.style.display = 'none';
+            planContentDiv.innerHTML = '';
+            generateBtn.disabled = true;
+            generateBtn.textContent = 'Generating...';
+
+            const formData = new FormData(form);
+            const gender = formData.get('gender');
+            const experience = formData.get('experience');
+            const workoutMode = formData.get('workout-mode');
+            const dietPreference = formData.get('diet-preference');
+
+            const prompt = `
+                Create a concise, poster-style fitness plan for a ${age}-year-old ${gender} with a ${experience} experience level, weighing ${weight}kg and ${height}cm tall (BMI: ${bmi.toFixed(1)}).
+                The primary goal is ${goal}. The workout mode is ${workoutMode}. The diet preference is ${dietPreference}.
+                The workout exercises and intensity should be appropriate for the user's experience level.
+                The diet plan must be suitable for an Indian context and must NOT include beef or pork.
+
+                The entire output must be in Markdown format, clean, and well-structured for a downloadable poster.
+
+                Start with a main heading: ### Your Weekly Fitness Poster
+
+                Then, create a section for the diet plan.
+                #### Simplified Diet Plan (No Beef/Pork)
+                - Create a Markdown table with columns: "Meal", and "Options". Provide 3-4 meal options.
+
+                Next, create a section for the workout schedule.
+                #### Weekly Workout Schedule
+                - Create a Markdown table for the 7-day week. The columns should be: "Day", "Focus/Activity", "Exercises", and "Sets & Reps".
+                - Include 3 workout days and 4 rest/active recovery days.
+                - For workout days, list 3-4 key exercises in the "Exercises" column appropriate for the experience level. Use commas to separate them.
+                - For rest days, suggest an activity like "Rest" or "Light Walk".
+            `;
+
+            try {
+                const generatedText = await generateText(prompt);
+                const htmlContent = parseMarkdown(generatedText);
+                planContentDiv.innerHTML = htmlContent;
+                downloadButtons.style.display = 'flex';
+            } catch (error) {
+                console.error('Error generating workout plan:', error);
+                planContentDiv.innerHTML = '<p class="text-red-500 text-center">Sorry, we couldn\'t generate a plan at this time. Please try again later.</p>';
+            } finally {
+                loader.classList.add('hidden');
+                generateBtn.disabled = false;
+                generateBtn.textContent = 'Generate My Plan';
+            }
+        });
+
+        function parseMarkdown(text) {
+            const lines = text.split('\n');
+            let html = '';
+            let inTable = false;
+
+            for (const line of lines) {
+                let processedLine = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+                if (processedLine.startsWith('### ')) {
+                    if (inTable) { html += '</tbody></table>'; inTable = false; }
+                    html += `<h3>${processedLine.substring(4)}</h3>`;
+                } else if (processedLine.startsWith('#### ')) {
+                    if (inTable) { html += '</tbody></table>'; inTable = false; }
+                    html += `<h4>${processedLine.substring(5)}</h4>`;
+                } else if (processedLine.startsWith('- ')) {
+                    if (inTable) { html += '</tbody></table>'; inTable = false; }
+                    if (!html.endsWith('</ul>')) { html += '<ul>'; }
+                    html += `<li>${processedLine.substring(2)}</li>`;
+                    if (lines.indexOf(line) === lines.length - 1 || !lines[lines.indexOf(line) + 1].startsWith('- ')) {
+                         html += '</ul>';
+                    }
+                } else if (processedLine.includes('|')) {
+                    const columns = processedLine.split('|').map(s => s.trim()).filter(Boolean);
+                    if (columns.length === 0) continue;
+
+                    if (!inTable && !processedLine.includes('---')) {
+                        html += '<table><thead><tr>';
+                        columns.forEach(col => { html += `<th>${col}</th>`; });
+                        html += '</tr></thead><tbody>';
+                        inTable = true;
+                    } else if (inTable && !processedLine.includes('---')) {
+                        html += '<tr>';
+                        columns.forEach(col => { html += `<td>${col.replace(/, /g, '<br>')}</td>`; }); // Add line breaks for exercises
+                        html += '</tr>';
+                    }
+                } else {
+                     if (inTable) { html += '</tbody></table>'; inTable = false; }
+                     if (processedLine.trim()) { html += `<p>${processedLine}</p>`; }
+                }
+            }
+            if (inTable) { html += '</tbody></table>'; }
+            return html;
+        }
+
+        document.getElementById('download-jpg').addEventListener('click', () => {
+            const planElement = document.getElementById('plan-content-wrapper');
+            html2canvas(planElement, { scale: 2 }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = 'workout-plan.jpg';
+                link.href = canvas.toDataURL('image/jpeg');
+                link.click();
+            });
+        });
+
+        document.getElementById('download-pdf').addEventListener('click', () => {
+            const { jsPDF } = window.jspdf;
+            const planElement = document.getElementById('plan-content-wrapper');
+            
+            html2canvas(planElement, { scale: 2 }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'px',
+                    format: [canvas.width, canvas.height]
+                });
+                pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+                pdf.save('workout-plan.pdf');
+            });
+        });
+
+    async function generateText(prompt) {
+        const response = await fetch(
+            "https://ai-diet-backend-yo95.onrender.com/generate",
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ prompt })
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error("Backend request failed");
+    }
+
+    const data = await response.json();
+    return data.text;
+}
+
+    </script>
+</body>
+</html>
