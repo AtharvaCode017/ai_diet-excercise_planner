@@ -23,11 +23,11 @@ app.post("/generate", async (req, res) => {
         return res.status(400).json({ error: "No prompt provided" });
     }
 
-    console.log("Sending request to Gemini (Model: gemini-1.5-flash)...");
+    // FIXED: using 'gemini-1.5-flash-001' which resolves the 404 error
+    console.log("Sending request to Gemini (Model: gemini-1.5-flash-001)...");
 
-    // FIXED: Using 'gemini-1.5-flash' which is the current stable model
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-001:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -39,16 +39,16 @@ app.post("/generate", async (req, res) => {
 
     const data = await response.json();
     
-    // Detailed Error Logging
+    // Check for API errors
     if (data.error) {
-        console.error("Gemini API Error Details:", JSON.stringify(data.error, null, 2));
+        console.error("Gemini API Error:", JSON.stringify(data.error, null, 2));
         return res.status(500).json({ text: `AI Error: ${data.error.message}` });
     }
 
     const result = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!result) {
-        console.error("Empty Result. Full Data Received:", JSON.stringify(data, null, 2));
+        console.error("Empty Result. Full Data:", JSON.stringify(data, null, 2));
         return res.json({ text: "Unable to generate plan. (AI returned empty response)" });
     }
 
