@@ -15,25 +15,15 @@ app.get("/", (req, res) => {
   res.send("AI Diet Backend is running 🚀");
 });
 
-// CHANGED: Route is now '/generate' to match frontend
 app.post("/generate", async (req, res) => {
   try {
-    // CHANGED: We now accept the 'prompt' directly from the frontend
     const { prompt } = req.body; 
 
     if (!prompt) {
         return res.status(400).json({ error: "No prompt provided" });
     }
 
-    app.post("/generate", async (req, res) => {
-  try {
-    const { prompt } = req.body; 
-
-    if (!prompt) {
-        return res.status(400).json({ error: "No prompt provided" });
-    }
-
-    console.log("Sending request to Gemini..."); // Log 1
+    console.log("Sending request to Gemini...");
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
@@ -48,31 +38,27 @@ app.post("/generate", async (req, res) => {
 
     const data = await response.json();
     
-    // DEBUG: Print the actual response from Google to the Render logs
-    console.log("Gemini Response:", JSON.stringify(data, null, 2));
-
+    // Check for API errors first
     if (data.error) {
+        console.error("Gemini API Error:", data.error);
         return res.status(500).json({ text: `AI Error: ${data.error.message}` });
     }
 
+    // Safely try to get the text
     const result = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
+    // If result is still undefined/null, handle it safely
     if (!result) {
-        return res.json({ text: "The AI sent an empty response. Check logs." });
+        console.error("No result found in data:", JSON.stringify(data));
+        return res.json({ text: "Unable to generate plan. (AI returned empty response)" });
     }
 
+    // Success!
     res.json({ text: result }); 
+
   } catch (error) {
     console.error("Server Crash:", error);
-    res.status(500).json({ error: "Gemini API failed" });
-  }
-});
-
-    // CHANGED: The frontend expects a JSON object with a 'text' property
-    res.json({ text: result }); 
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Gemini API failed" });
+    res.status(500).json({ error: "Server internal error" });
   }
 });
 
