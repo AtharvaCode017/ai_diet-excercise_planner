@@ -25,8 +25,9 @@ app.post("/generate", async (req, res) => {
 
     console.log("Sending request to Gemini...");
 
+    // UPDATED: Changed 'gemini-pro' to 'gemini-1.5-flash'
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -38,22 +39,20 @@ app.post("/generate", async (req, res) => {
 
     const data = await response.json();
     
-    // Check for API errors first
+    // Check for API errors
     if (data.error) {
         console.error("Gemini API Error:", data.error);
         return res.status(500).json({ text: `AI Error: ${data.error.message}` });
     }
 
-    // Safely try to get the text
+    // Safely get the text
     const result = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
-    // If result is still undefined/null, handle it safely
     if (!result) {
         console.error("No result found in data:", JSON.stringify(data));
         return res.json({ text: "Unable to generate plan. (AI returned empty response)" });
     }
 
-    // Success!
     res.json({ text: result }); 
 
   } catch (error) {
