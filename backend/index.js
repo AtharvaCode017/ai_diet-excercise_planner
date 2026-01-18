@@ -11,79 +11,77 @@ app.use(express.json());
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// DIAGNOSTIC FUNCTION: This runs when the server starts
-async function listAvailableModels() {
-  try {
-    console.log("🔍 Checking available Gemini models for your API Key...");
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}`
-    );
-    const data = await response.json();
-    
-    if (data.models) {
-      console.log("✅ AVAILABLE MODELS:");
-      data.models.forEach(m => console.log(`   - ${m.name.replace('models/', '')}`));
-    } else {
-      console.log("❌ Could not list models. Error:", JSON.stringify(data));
-    }
-  } catch (error) {
-    console.error("❌ Failed to check models:", error.message);
-  }
-}
+// List of models to try in order of preference
+const MODELS_TO_TRY = [
+  "gemini-1.5-flash",
+  "gemini-1.5-pro",
+  "gemini-1.0-pro",
+  "gemini-1.5-flash-001",
+  "gemini-1.5-flash-latest"
+];
 
 app.get("/", (req, res) => {
   res.send("AI Diet Backend is running 🚀");
 });
 
 app.post("/generate", async (req, res) => {
-  try {
-    const { prompt } = req.body; 
+  const { prompt } = req.body;
 
-    if (!prompt) {
-        return res.status(400).json({ error: "No prompt provided" });
-    }
-
-    // TRYING THE LATEST MODEL: gemini-2.0-flash-exp
-    const modelName = "gemini-2.0-flash-exp"; 
-    console.log(`Sending request to Gemini (Model: ${modelName})...`);
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
-        })
-      }
-    );
-
-    const data = await response.json();
-    
-    if (data.error) {
-        console.error("Gemini API Error:", JSON.stringify(data.error, null, 2));
-        // If 2.0 fails, the frontend will see this error
-        return res.status(500).json({ text: `AI Error: ${data.error.message}. Check Render Logs for available models.` });
-    }
-
-    const result = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!result) {
-        console.error("Empty Result:", JSON.stringify(data, null, 2));
-        return res.json({ text: "Unable to generate plan. (AI returned empty response)" });
-    }
-
-    res.json({ text: result }); 
-
-  } catch (error) {
-    console.error("Server Crash:", error);
-    res.status(500).json({ error: "Server internal error" });
+  if (!prompt) {
+    return res.status(400).json({ error: "No prompt provided" });
   }
+
+  let lastError = null;
+
+  // LOOP: Try each model until one works
+  for (const modelName of MODELS_TO_TRY) {
+    try {
+      console.log(`🔄 Attempting to generate with model: ${modelName}...`);
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }]
+          })
+        }
+      );
+
+      const data = await response.json();
+
+      // If this model failed (404 Not Found or 429 Over Limit), throw error to trigger next loop
+      if (data.error) {
+        console.warn(`⚠️ Model ${modelName} failed:`, data.error.message);
+        lastError = data.error.message;
+        continue; // Try the next model in the list
+      }
+
+      const result = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!result) {
+        console.warn(`⚠️ Model ${modelName} returned empty result.`);
+        lastError = "Empty response";
+        continue; // Try the next model
+      }
+
+      // SUCCESS! We found a working model and got a result.
+      console.log(`✅ Success! Generated plan using: ${modelName}`);
+      return res.json({ text: result });
+
+    } catch (error) {
+      console.error(`❌ Network/Server error with ${modelName}:`, error.message);
+      lastError = error.message;
+    }
+  }
+
+  // If we loop through ALL models and none work:
+  console.error("❌ All models failed.");
+  res.status(500).json({ 
+    text: `Unable to generate plan. All AI models failed. Last error: ${lastError}` 
+  });
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on ${PORT}`);
-  // Run the diagnostic check on startup
-  listAvailableModels();
-});
+app.listen(PORT, () => console.log(`Server running on ${PORT}`));
