@@ -25,6 +25,16 @@ app.post("/generate", async (req, res) => {
         return res.status(400).json({ error: "No prompt provided" });
     }
 
+    app.post("/generate", async (req, res) => {
+  try {
+    const { prompt } = req.body; 
+
+    if (!prompt) {
+        return res.status(400).json({ error: "No prompt provided" });
+    }
+
+    console.log("Sending request to Gemini..."); // Log 1
+
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
       {
@@ -37,10 +47,26 @@ app.post("/generate", async (req, res) => {
     );
 
     const data = await response.json();
+    
+    // DEBUG: Print the actual response from Google to the Render logs
+    console.log("Gemini Response:", JSON.stringify(data, null, 2));
 
-    const result =
-      data.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "Unable to generate plan.";
+    if (data.error) {
+        return res.status(500).json({ text: `AI Error: ${data.error.message}` });
+    }
+
+    const result = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!result) {
+        return res.json({ text: "The AI sent an empty response. Check logs." });
+    }
+
+    res.json({ text: result }); 
+  } catch (error) {
+    console.error("Server Crash:", error);
+    res.status(500).json({ error: "Gemini API failed" });
+  }
+});
 
     // CHANGED: The frontend expects a JSON object with a 'text' property
     res.json({ text: result }); 
