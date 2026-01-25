@@ -1,3 +1,14 @@
+Here is the updated code. I have removed the complex gauge visualization and replaced it with a clean, easy-to-read reference chart as requested. All other functionalities (AI generation, PDF/JPG downloads, glassmorphism UI) remain exactly the same.
+
+### **Key Changes Made:**
+
+1. **Removed:** The Gauge HTML structure and the complex CSS (conic gradients, needle rotation logic).
+2. **Added:** A clean, color-coded reference list using Tailwind CSS to match the existing dark theme.
+3. **Updated JavaScript:** Simplified the `updateBmiInfo` function to only calculate and display the number, removing the math for the needle rotation.
+
+You can save this as `index.html`.
+
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -131,20 +142,6 @@
             border-left: 4px solid #ff3278;
             padding-left: 1rem;
         }
-
-        /* --- FIXED BMI SCALE STYLES --- */
-        .bmi-gauge-background {
-            /* Conic gradient from 270deg (-90) to 90deg (+90) */
-            /* Blue (Under): 270-315 | Green (Normal): 315-360 | Yellow (Over): 0-45 | Red (Obese): 45-90 */
-            background: conic-gradient(
-                from 270deg, 
-                #3b82f6 0deg 45deg,   /* Underweight */
-                #22c55e 45deg 90deg,  /* Normal */
-                #eab308 90deg 135deg, /* Overweight */
-                #ef4444 135deg 180deg, /* Obese */
-                transparent 180deg
-            );
-        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col antialiased">
@@ -232,24 +229,26 @@
                     </div>
 
                     <div id="bmi-info-container" class="mt-10 text-center hidden animate-pop-up">
-                        <div class="inline-block relative">
-                            <p id="bmi-text" class="text-2xl font-bold text-white mb-4">BMI: 0.0</p>
+                        <div class="inline-block relative bg-white/5 p-6 rounded-2xl border border-white/10 w-full md:w-2/3 lg:w-1/2">
+                            <p id="bmi-text" class="text-3xl font-extrabold text-white mb-6">BMI: <span class="text-cultAccent">0.0</span></p>
                             
-                            <div class="relative w-[300px] h-[160px] mx-auto">
-                                <div class="w-[300px] h-[150px] rounded-t-full overflow-hidden relative">
-                                    <div class="w-full h-full bmi-gauge-background"></div>
+                            <div class="grid grid-cols-1 gap-2 text-sm text-left">
+                                <div class="flex justify-between items-center p-2 rounded bg-white/5 hover:bg-white/10 transition">
+                                    <span class="text-gray-300">Underweight</span>
+                                    <span class="font-mono font-bold text-blue-400">&lt; 18.5</span>
                                 </div>
-                                
-                                <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[220px] h-[110px] bg-cultCard rounded-t-full z-10"></div>
-                                
-                                <div id="bmi-needle" class="absolute bottom-0 left-1/2 w-1.5 h-[140px] bg-white origin-bottom -translate-x-1/2 z-20 transition-transform duration-700 ease-out shadow-lg" style="transform: rotate(-90deg);"></div>
-                                
-                                <div class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-4 h-4 bg-white rounded-full z-30 shadow-md"></div>
-
-                                <span class="absolute top-[85px] left-[25px] text-[10px] font-bold text-blue-400 -rotate-45">UNDER</span>
-                                <span class="absolute top-[35px] left-[70px] text-[10px] font-bold text-green-400 -rotate-12">NORMAL</span>
-                                <span class="absolute top-[35px] right-[70px] text-[10px] font-bold text-yellow-400 rotate-12">OVER</span>
-                                <span class="absolute top-[85px] right-[25px] text-[10px] font-bold text-red-500 rotate-45">OBESE</span>
+                                <div class="flex justify-between items-center p-2 rounded bg-white/5 hover:bg-white/10 transition">
+                                    <span class="text-gray-300">Normal weight</span>
+                                    <span class="font-mono font-bold text-green-400">18.5 – 24.9</span>
+                                </div>
+                                <div class="flex justify-between items-center p-2 rounded bg-white/5 hover:bg-white/10 transition">
+                                    <span class="text-gray-300">Overweight</span>
+                                    <span class="font-mono font-bold text-yellow-400">25 – 29.9</span>
+                                </div>
+                                <div class="flex justify-between items-center p-2 rounded bg-white/5 hover:bg-white/10 transition">
+                                    <span class="text-gray-300">Obesity</span>
+                                    <span class="font-mono font-bold text-red-500">≥ 30</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -296,7 +295,6 @@
         const downloadButtons = document.getElementById('download-buttons');
         const bmiInfoContainer = document.getElementById('bmi-info-container');
         const bmiText = document.getElementById('bmi-text');
-        const bmiNeedle = document.getElementById('bmi-needle');
         const errorModal = document.getElementById('error-modal');
         const modalTitle = document.getElementById('modal-title');
         const modalMessage = document.getElementById('modal-message');
@@ -313,25 +311,20 @@
         function updateBmiInfo() {
             const weight = parseFloat(document.getElementById('weight').value);
             const height = parseFloat(document.getElementById('height').value);
+            
             if (weight > 0 && height > 0) {
                 const heightInMeters = height / 100;
                 const bmi = (weight / (heightInMeters * heightInMeters));
-                bmiText.innerHTML = `BMI: <span class="text-cultAccent text-3xl">${bmi.toFixed(1)}</span>`;
-                bmiInfoContainer.classList.remove('hidden');
                 
-                // --- FIXED ROTATION LOGIC ---
-                // Gauge is 180 degrees total (-90 to +90)
-                // Range mapped: 15 (min) to 40 (max)
-                // 15 BMI -> -90 deg
-                // 40 BMI -> +90 deg
-                let rotation = -90; 
-                if (bmi <= 15) rotation = -90;
-                else if (bmi >= 40) rotation = 90;
-                else {
-                    // Formula: (Current - Min) / (Max - Min) * TotalDegrees + StartDegree
-                    rotation = ((bmi - 15) / (40 - 15)) * 180 - 90;
-                }
-                bmiNeedle.style.transform = `translateX(-50%) rotate(${rotation}deg)`;
+                // Color coding the BMI result value dynamically
+                let colorClass = "text-white";
+                if(bmi < 18.5) colorClass = "text-blue-400";
+                else if(bmi >= 18.5 && bmi <= 24.9) colorClass = "text-green-400";
+                else if(bmi >= 25 && bmi <= 29.9) colorClass = "text-yellow-400";
+                else if(bmi >= 30) colorClass = "text-red-500";
+
+                bmiText.innerHTML = `BMI: <span class="${colorClass} text-4xl">${bmi.toFixed(1)}</span>`;
+                bmiInfoContainer.classList.remove('hidden');
             } else {
                 bmiInfoContainer.classList.add('hidden');
             }
@@ -402,7 +395,6 @@
                 .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>')
                 .replace(/\|(.+)\|/g, (match) => {
                     const cells = match.split('|').filter(c => c.trim());
-                    const isHeader = text.includes('---'); // Rough check, improved in real apps
                     return `<tr class="border-b border-gray-700">${cells.map(c => `<td class="p-2">${c}</td>`).join('')}</tr>`;
                 })
                 .replace(/((<tr>.*<\/tr>\s*)+)/g, '<table class="w-full text-left text-sm text-gray-300 mt-2 mb-4 bg-white/5 rounded-lg overflow-hidden">$1</table>');
@@ -439,3 +431,5 @@
     </script>
 </body>
 </html>
+
+```
